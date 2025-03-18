@@ -1,0 +1,101 @@
+import requests
+import json
+from flask import Flask, render_template, request
+
+app = Flask(__name__)
+
+API_KEY = " c58785d716415833d5cfa8b1d50ee488"  # Replace with your API key
+BASE_URL = "http://api.openweathermap.org/data/2.5/weather"
+
+def get_weather(city):
+    """Fetches weather data from OpenWeatherMap API."""
+    params = {
+        "q": city,
+        "appid": API_KEY,
+        "units": "metric",  # Get temperature in Celsius
+    }
+    try:
+        response = requests.get(BASE_URL, params=params)
+        response.raise_for_status()  # Raise HTTPError for bad responses (4xx or 5xx)
+        weather_data = response.json()
+        return weather_data
+    except requests.exceptions.RequestException as e:
+        print(f"Error fetching weather data: {e}")
+        return None
+    except json.JSONDecodeError as e:
+        print(f"Error decoding JSON response: {e}")
+        return None
+
+@app.route("/", methods=["GET", "POST"])
+def index():
+    weather_info = None
+    error_message = None
+
+    if request.method == "POST":
+        city = request.form.get("city")
+        if city:
+            weather_data = get_weather(city)
+            if weather_data:
+                try:
+                    weather_info = {
+                        "city": weather_data["name"],
+                        "temperature": weather_data["main"]["temp"],
+                        "humidity": weather_data["main"]["humidity"],
+                        "description": weather_data["weather"][0]["description"],
+                        "icon": weather_data['weather'][0]['icon']
+                    }
+                except KeyError:
+                    error_message = "Invalid weather data received."
+            else:
+                error_message = "City not found or API error."
+        else:
+            error_message = "Please enter a city name."
+
+    return render_template("index.html", weather=weather_info, error=error_message)
+
+if __name__ == "__main__":
+    app.run(debug=True)
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Weather Dashboard</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            text-align: center;
+        }
+        .weather-info {
+            margin-top: 20px;
+            padding: 20px;
+            border: 1px solid #ccc;
+            display: inline-block;
+        }
+        .error {
+            color: red;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Weather Dashboard</h1>
+    <form method="POST">
+        <input type="text" name="city" placeholder="Enter city name">
+        <button type="submit">Get Weather</button>
+    </form>
+
+    {% if weather %}
+    <div class="weather-info">
+        <h2>{{ weather.city }}</h2>
+        <p>Temperature: {{ weather.temperature }} °C</p>
+        <p>Humidity: {{ weather.humidity }}%</p>
+        <p>Description: {{ weather.description }}</p>
+        <img src="http://openweathermap.org/img/w/{{ weather.icon }}.png" alt="Weather Icon">
+
+    </div>
+    {% endif %}
+
+    {% if error %}
+    <p class="error">{{ error }}</p>
+    {% endif %}
+</body>
+</html>
